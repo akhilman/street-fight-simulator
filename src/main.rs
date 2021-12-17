@@ -30,7 +30,8 @@ impl Action {
     }
 }
 
-// Иарке для живых собакак
+// Флаг для живых собакак
+
 #[derive(Debug)]
 struct Alive;
 
@@ -406,7 +407,7 @@ fn main() {
         .add_thread_local(choose_enemy_system())
         .add_thread_local(randomize_damage_system())
         .add_thread_local(choose_action_system())
-        // Остальные системы могут быть распараллелены
+        // Остальные системы могут запускаться параллельно
         .add_system(bark_system())
         .add_system(snarls_system())
         .add_system(attack_system())
@@ -415,7 +416,7 @@ fn main() {
         .flush()
         .build();
 
-    // Генератор случайнх чисел будет глобальным ресурсом
+    // Генератор случайных чисел будет глобальным ресурсом
     let mut resources = Resources::default();
     resources.insert(rng);
 
