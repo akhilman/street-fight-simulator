@@ -378,8 +378,6 @@ struct Opt {
 }
 
 fn main() {
-    println!("Street fight begins!");
-
     let opt = Opt::from_args();
 
     // Количество ходов
@@ -421,6 +419,7 @@ fn main() {
     let mut resources = Resources::default();
     resources.insert(rng);
 
+    println!("Street fight begins!");
     for n in 1..=n_turns {
         println!("Turn {}", n);
         schedule.execute(&mut world, &mut resources);
