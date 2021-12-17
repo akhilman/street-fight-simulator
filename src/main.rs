@@ -342,7 +342,7 @@ fn attack(world: &mut SubWorld) {
 #[filter(component::<Alive>())]
 fn death(entity: &Entity, health: &Health, name: &Name, commands: &mut CommandBuffer) {
     if **health == 0 {
-        println!("Sadly {} is dead", name);
+        println!("Sadly {} is died", name);
         commands.remove_component::<Alive>(*entity);
     }
 }
