@@ -2,7 +2,7 @@ use legion::{systems::CommandBuffer, world::SubWorld, *};
 use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
 use std::{collections::HashMap, default::Default, fmt, ops::Deref};
 
-// Новый тип для действия собакаки
+// Новый тип для действия собаки
 
 #[derive(Clone, Copy, Debug)]
 enum Action {
@@ -24,7 +24,7 @@ impl Action {
     }
 }
 
-// Флаг для живых собакак
+// Флаг для живых собак
 
 #[derive(Debug)]
 struct Alive;
@@ -86,7 +86,7 @@ impl fmt::Display for Damage {
     }
 }
 
-// Новый тип для врага собакаки
+// Новый тип для врага собаки
 
 #[derive(Default, Debug, Clone, Copy)]
 struct Enemy(Option<Entity>);
@@ -114,7 +114,7 @@ impl From<Option<Entity>> for Enemy {
     }
 }
 
-// Новый тип для жизни собакаки
+// Новый тип для жизни собаки
 
 #[derive(Clone, Copy, Debug)]
 struct Health(u32);
@@ -143,7 +143,7 @@ impl fmt::Display for Health {
     }
 }
 
-// Новый тип для имени собакаки
+// Новый тип для имени собаки
 
 #[derive(Debug)]
 struct Name(String);
@@ -179,13 +179,13 @@ impl fmt::Display for Name {
     }
 }
 
-/// Заполняем мир собакаками
+/// Заполняем мир собаками
 fn populate_world<I, T>(world: &mut World, names: I)
 where
     T: ToString,
     I: IntoIterator<Item = T>,
 {
-    // Для каждой собакаки создаётся сущность со всеми необходимыми компонентами
+    // Для каждой собаки создаётся сущность со всеми необходимыми компонентами
     let _dogs: Vec<Entity> = names
         .into_iter()
         .map(|name| -> Entity {
@@ -226,7 +226,7 @@ fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
         .cloned()
         .collect();
 
-    // Не атакуем дохлых собакак
+    // Не атакуем дохлых собак
     <&mut Enemy>::query()
         .filter(component::<Alive>())
         .iter_mut(world)
@@ -345,7 +345,7 @@ fn attack(world: &mut SubWorld) {
             }
         });
 
-    // Применяем урон к собакакам
+    // Применяем урон к собакам
     <(Entity, &mut Health, &mut Attacker)>::query()
         .filter(component::<Alive>())
         .iter_mut(world)
@@ -409,7 +409,7 @@ fn main() {
     // Количество ходов
     let n_turns = opt.turns;
 
-    // Тут можно добавить сколько угодно имён собак, для каждого имени будет создана собакака
+    // Тут можно добавить сколько угодно имён собак, для каждого имени будет создана собака
     let mut names: Vec<&str> = if opt.dog_names.is_empty() {
         vec![&"Rex", &"Fluffy"]
     } else {
