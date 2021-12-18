@@ -1,11 +1,6 @@
 use legion::{systems::CommandBuffer, world::SubWorld, *};
 use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
-use std::{
-    collections::HashMap,
-    default::Default,
-    fmt,
-    ops::{Deref, DerefMut},
-};
+use std::{collections::HashMap, default::Default, fmt, ops::Deref};
 
 // Новый тип для действия собакаки
 
@@ -18,15 +13,14 @@ enum Action {
 }
 
 impl Action {
-    fn random(rng: &mut impl Rng, has_enemy: bool) -> Self {
-        if has_enemy {
-            [Self::Barks, Self::Snarls, Self::Attack]
-                .choose(rng)
-                .cloned()
-                .unwrap()
-        } else {
-            Self::Idle
-        }
+    fn random_aggression(rng: &mut impl Rng) -> Self {
+        [Self::Barks, Self::Snarls, Self::Attack]
+            .choose(rng)
+            .cloned()
+            .unwrap()
+    }
+    fn idle() -> Self {
+        Action::Idle
     }
 }
 
@@ -37,18 +31,29 @@ struct Alive;
 
 // Новый тип для последней атаковавшей сабокаки
 
-#[derive(Default, Debug)]
-struct Attacker(Option<Entity>);
+#[derive(Default, Debug, Clone, Copy)]
+pub struct Attacker(Option<Entity>);
 
-impl Deref for Attacker {
-    type Target = Option<Entity>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl Attacker {
+    pub fn new_none() -> Self {
+        Self(None)
+    }
+    pub fn entity(&self) -> Option<&Entity> {
+        self.0.as_ref()
+    }
+
+    pub fn is_some(&self) -> bool {
+        self.0.is_some()
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.0.is_none()
     }
 }
-impl DerefMut for Attacker {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+
+impl From<Option<Entity>> for Attacker {
+    fn from(maybe_ent: Option<Entity>) -> Self {
+        Attacker(maybe_ent)
     }
 }
 
@@ -57,21 +62,21 @@ impl DerefMut for Attacker {
 #[derive(Debug)]
 struct Damage(u32);
 
+impl Damage {
+    fn value(&self) -> u32 {
+        self.0
+    }
+}
+
 impl Default for Damage {
     fn default() -> Self {
         Damage(0)
     }
 }
 
-impl Deref for Damage {
-    type Target = u32;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl DerefMut for Damage {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+impl From<u32> for Damage {
+    fn from(value: u32) -> Self {
+        Self(value)
     }
 }
 
@@ -83,18 +88,29 @@ impl fmt::Display for Damage {
 
 // Новый тип для врага собакаки
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Copy)]
 struct Enemy(Option<Entity>);
 
-impl Deref for Enemy {
-    type Target = Option<Entity>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl Enemy {
+    pub fn new_none() -> Self {
+        Self(None)
+    }
+    pub fn entity(&self) -> Option<&Entity> {
+        self.0.as_ref()
+    }
+
+    pub fn is_some(&self) -> bool {
+        self.0.is_some()
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.0.is_none()
     }
 }
-impl DerefMut for Enemy {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+
+impl From<Option<Entity>> for Enemy {
+    fn from(maybe_ent: Option<Entity>) -> Self {
+        Enemy(maybe_ent)
     }
 }
 
@@ -103,21 +119,21 @@ impl DerefMut for Enemy {
 #[derive(Clone, Copy, Debug)]
 struct Health(u32);
 
-impl Default for Health {
-    fn default() -> Self {
-        Health(10u32)
+impl Health {
+    fn value(&self) -> u32 {
+        self.0
     }
 }
 
-impl Deref for Health {
-    type Target = u32;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl Default for Health {
+    fn default() -> Self {
+        Health(10)
     }
 }
-impl DerefMut for Health {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+
+impl From<u32> for Health {
+    fn from(value: u32) -> Self {
+        Self(value)
     }
 }
 
@@ -138,15 +154,22 @@ impl Name {
     }
 }
 
+impl From<&'_ str> for Name {
+    fn from(s: &str) -> Self {
+        Name(s.into())
+    }
+}
+
+impl From<String> for Name {
+    fn from(s: String) -> Self {
+        Name(s)
+    }
+}
+
 impl Deref for Name {
     type Target = str;
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-impl DerefMut for Name {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }
 
@@ -159,7 +182,7 @@ impl fmt::Display for Name {
 /// Заполняем мир собакаками
 fn populate_world<I, T>(world: &mut World, names: I)
 where
-    T: AsRef<str>,
+    T: ToString,
     I: IntoIterator<Item = T>,
 {
     // Для каждой собакаки создаётся сущность со всеми необходимыми компонентами
@@ -168,7 +191,7 @@ where
         .map(|name| -> Entity {
             world.push((
                 Alive,
-                Name::new(name.as_ref()),
+                Name::new(name),
                 Health::default(),
                 Action::Snarls,
                 Attacker::default(),
@@ -183,7 +206,11 @@ where
 #[system(for_each)]
 #[filter(component::<Alive>())]
 fn choose_action(action: &mut Action, enemy: &Enemy, #[resource] rng: &mut ThreadRng) {
-    *action = Action::random(rng, enemy.is_some())
+    *action = if enemy.is_some() {
+        Action::random_aggression(rng)
+    } else {
+        Action::idle()
+    }
 }
 
 /// Выбираем врагов
@@ -204,9 +231,9 @@ fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
         .filter(component::<Alive>())
         .iter_mut(world)
         .for_each(|enemy| {
-            if let Enemy(Some(enemy_ent)) = enemy {
+            if let Some(enemy_ent) = enemy.entity() {
                 if !targets.contains(enemy_ent) {
-                    *enemy = Enemy(None);
+                    *enemy = Enemy::new_none();
                 }
             }
         });
@@ -216,9 +243,9 @@ fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
         .filter(component::<Alive>())
         .iter_mut(world)
         .for_each(|(enemy, attacker)| {
-            if let Attacker(Some(attacker_ent)) = attacker {
+            if let Some(attacker_ent) = attacker.entity() {
                 if targets.contains(attacker_ent) {
-                    *enemy = Enemy(Some(attacker_ent.clone()));
+                    *enemy = Some(*attacker_ent).into();
                 }
             }
         });
@@ -229,13 +256,12 @@ fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
         .iter_mut(world)
         .for_each(|(doggy, enemy)| {
             if enemy.is_none() {
-                *enemy = Enemy(
-                    targets
-                        .iter()
-                        .filter(|target| **target != *doggy)
-                        .nth(rng.gen_range(0..targets.len() - 1))
-                        .cloned(),
-                );
+                *enemy = targets
+                    .iter()
+                    .filter(|target| **target != *doggy)
+                    .nth(rng.gen_range(0..targets.len() - 1))
+                    .cloned()
+                    .into();
             };
         });
 }
@@ -244,7 +270,7 @@ fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
 #[system(for_each)]
 #[filter(component::<Alive>())]
 fn randomize_damage(damage: &mut Damage, #[resource] rng: &mut ThreadRng) {
-    **damage = rng.gen_range(1..=8);
+    *damage = rng.gen_range(1..=8).into();
 }
 
 /// Лаем
@@ -287,14 +313,14 @@ fn attack(world: &mut SubWorld) {
         .filter(component::<Alive>())
         .iter_mut(world)
         .for_each(|(doggy, action, enemy, damage)| {
-            if let (Action::Attack, Some(enemy)) = (action, enemy.deref()) {
+            if let (Action::Attack, Some(enemy)) = (action, enemy.entity()) {
                 target_entities.push(*enemy);
                 target_attackers.push(*doggy);
-                target_damages.push(**damage);
+                target_damages.push(damage.value());
             }
         });
 
-    // Записываем имена и здоровье тех кого покусали в словарь
+    // Пишем что случилось в консоль
     let mut target_names_healths: HashMap<Entity, (String, Health)> = HashMap::default();
 
     <(Entity, &Health, &Name)>::query()
@@ -305,12 +331,11 @@ fn attack(world: &mut SubWorld) {
             target_names_healths.insert(*doggy, (name.to_string(), *health));
         });
 
-    // Пишем что случилось в консоль
     <(&Action, &Name, &Health, &Enemy, &Damage)>::query()
         .filter(component::<Alive>())
         .iter_mut(world)
         .for_each(|(action, name, health, enemy, damage)| {
-            if let (Action::Attack, Enemy(Some(enemy_ent))) = (action, enemy) {
+            if let (Action::Attack, Some(enemy_ent)) = (action, enemy.entity()) {
                 if let Some((target_name, target_health)) = target_names_healths.get(&enemy_ent) {
                     println!(
                         "{}[{}] attacks {}[{}] for {} damage",
@@ -331,8 +356,8 @@ fn attack(world: &mut SubWorld) {
                 .zip(target_attackers.iter())
                 .filter(|((wounded, _), _)| **wounded == *doggy)
                 .for_each(|((_, damage), new_attacker)| {
-                    **health = health.saturating_sub(*damage);
-                    **attacker = Some(*new_attacker);
+                    *health = health.value().saturating_sub(*damage).into();
+                    *attacker = Some(*new_attacker).into();
                 });
         });
 }
@@ -341,7 +366,7 @@ fn attack(world: &mut SubWorld) {
 #[system(for_each)]
 #[filter(component::<Alive>())]
 fn death(entity: &Entity, health: &Health, name: &Name, commands: &mut CommandBuffer) {
-    if **health == 0 {
+    if health.value() == 0 {
         println!("Sadly {} is died", name);
         commands.remove_component::<Alive>(*entity);
     }
