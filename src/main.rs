@@ -1,4 +1,4 @@
-use legion::{systems::CommandBuffer, world::SubWorld, *};
+use hecs::*;
 use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
 use std::{collections::HashMap, default::Default, fmt, ops::Deref};
 
@@ -189,7 +189,7 @@ where
     let _dogs: Vec<Entity> = names
         .into_iter()
         .map(|name| -> Entity {
-            world.push((
+            world.spawn((
                 Alive,
                 Name::new(name),
                 Health::default(),
@@ -203,8 +203,8 @@ where
 }
 
 /// Выбираем действие для сабокаки
-#[system(for_each)]
-#[filter(component::<Alive>())]
+// #[system(for_each)]
+// #[filter(component::<Alive>())]
 fn choose_action(action: &mut Action, enemy: &Enemy, #[resource] rng: &mut ThreadRng) {
     *action = if enemy.is_some() {
         Action::random_aggression(rng)
@@ -214,10 +214,10 @@ fn choose_action(action: &mut Action, enemy: &Enemy, #[resource] rng: &mut Threa
 }
 
 /// Выбираем врагов
-#[system]
-#[write_component(Enemy)]
-#[read_component(Entity)]
-#[read_component(Attacker)]
+// #[system]
+// #[write_component(Enemy)]
+// #[read_component(Entity)]
+// #[read_component(Attacker)]
 fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
     // Собираем всех кого можно атактовать
     let targets: Vec<Entity> = <Entity>::query()
@@ -267,15 +267,15 @@ fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
 }
 
 /// Выбираем cтепень урона
-#[system(for_each)]
-#[filter(component::<Alive>())]
+// #[system(for_each)]
+// #[filter(component::<Alive>())]
 fn randomize_damage(damage: &mut Damage, #[resource] rng: &mut ThreadRng) {
     *damage = rng.gen_range(1..=8).into();
 }
 
 /// Лаем
-#[system(for_each)]
-#[filter(component::<Alive>())]
+// #[system(for_each)]
+// #[filter(component::<Alive>())]
 fn bark(name: &Name, action: &Action, health: &Health) {
     match action {
         Action::Barks => println!("{}[{}] barks.", name, health),
@@ -284,8 +284,8 @@ fn bark(name: &Name, action: &Action, health: &Health) {
 }
 
 /// Рычим
-#[system(for_each)]
-#[filter(component::<Alive>())]
+// #[system(for_each)]
+// #[filter(component::<Alive>())]
 fn snarls(name: &Name, action: &Action, health: &Health) {
     match action {
         Action::Snarls => println!("{}[{}] snarls.", name, health),
@@ -294,14 +294,14 @@ fn snarls(name: &Name, action: &Action, health: &Health) {
 }
 
 /// Кусаем
-#[system]
-#[read_component(Entity)]
-#[write_component(Health)]
-#[write_component(Attacker)]
-#[read_component(Name)]
-#[read_component(Action)]
-#[read_component(Enemy)]
-#[read_component(Damage)]
+// #[system]
+// #[read_component(Entity)]
+// #[write_component(Health)]
+// #[write_component(Attacker)]
+// #[read_component(Name)]
+// #[read_component(Action)]
+// #[read_component(Enemy)]
+// #[read_component(Damage)]
 fn attack(world: &mut SubWorld) {
     // Сохраняем все найденные атаки как (атакующий, атакуемый)
     let mut target_entities: Vec<Entity> = vec![];
@@ -363,8 +363,8 @@ fn attack(world: &mut SubWorld) {
 }
 
 /// Подыхаем
-#[system(for_each)]
-#[filter(component::<Alive>())]
+// #[system(for_each)]
+// #[filter(component::<Alive>())]
 fn death(entity: &Entity, health: &Health, name: &Name, commands: &mut CommandBuffer) {
     if health.value() == 0 {
         println!("Sadly {} is died", name);
@@ -427,31 +427,30 @@ fn main() {
     populate_world(&mut world, &names);
 
     // Добавляем системы в планеровщик
-    let mut schedule = Schedule::builder()
-        // Системы использующие рандом будут выполняться в главном триде
-        .add_thread_local(choose_enemy_system())
-        .add_thread_local(randomize_damage_system())
-        .add_thread_local(choose_action_system())
-        // Остальные системы могут запускаться параллельно
-        .add_system(bark_system())
-        .add_system(snarls_system())
-        .add_system(attack_system())
-        .add_system(death_system())
-        // .add_thread_local(debug_print_system())
-        .flush()
-        .build();
+    // let mut schedule = Schedule::builder()
+    //     // Системы использующие рандом будут выполняться в главном триде
+    //     .add_thread_local(choose_enemy_system())
+    //     .add_thread_local(randomize_damage_system())
+    //     .add_thread_local(choose_action_system())
+    //     // Остальные системы могут запускаться параллельно
+    //     .add_system(bark_system())
+    //     .add_system(snarls_system())
+    //     .add_system(attack_system())
+    //     .add_system(death_system())
+    //     // .add_thread_local(debug_print_system())
+    //     .flush()
+    //     .build();
 
     // Генератор случайных чисел будет глобальным ресурсом
-    let mut resources = Resources::default();
-    resources.insert(rng);
+    // let mut resources = Resources::default();
+    // resources.insert(rng);
 
     println!("Street fight begins!");
     for n in 1..=n_turns {
         println!("Turn {}", n);
-        schedule.execute(&mut world, &mut resources);
-        if let Some((0, name)) = <&Name>::query()
-            .filter(component::<Alive>())
-            .iter(&world)
+        // schedule.execute(&mut world, &mut resources);
+        if let Some((0, (_, name))) = world.query::<&Name>().with::<Alive>()
+            .iter()
             .enumerate()
             .last()
         {
