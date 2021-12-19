@@ -410,19 +410,13 @@ fn main() {
     let n_turns = opt.turns;
 
     // Тут можно добавить сколько угодно имён собак, для каждого имени будет создана собака
-    let mut names: Vec<&str> = if opt.dog_names.is_empty() {
+    let names: Vec<&str> = if opt.dog_names.is_empty() {
         vec![&"Rex", &"Fluffy"]
     } else {
         opt.dog_names.iter().map(|s| s.as_str()).collect()
     };
 
     let mut world = World::default();
-
-    // Генератор случайных чисел
-    let mut rng = thread_rng();
-
-    // Порядок ходов собак будет случайным
-    names.as_mut_slice().shuffle(&mut rng);
 
     populate_world(&mut world, &names);
 
@@ -443,7 +437,7 @@ fn main() {
 
     // Генератор случайных чисел будет глобальным ресурсом
     let mut resources = Resources::default();
-    resources.insert(rng);
+    resources.insert(thread_rng());
 
     println!("Street fight begins!");
     for n in 1..=n_turns {
