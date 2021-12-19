@@ -427,14 +427,10 @@ fn main() {
     };
 
     let mut world = World::default();
+    populate_world(&mut world, &names);
 
     // Генератор случайных чисел
     let mut rng = thread_rng();
-
-    // Порядок ходов собак будет случайным
-    names.as_mut_slice().shuffle(&mut rng);
-
-    populate_world(&mut world, &names);
 
     println!("Street fight begins!");
     for n in 1..=n_turns {
