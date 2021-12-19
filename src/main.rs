@@ -1,5 +1,5 @@
 use hecs::*;
-use rand::{rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng};
+use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::{collections::HashMap, default::Default, fmt, ops::Deref};
 
 // Новый тип для действия собаки
@@ -203,34 +203,35 @@ where
 }
 
 /// Выбираем действие для сабокаки
-// #[system(for_each)]
-// #[filter(component::<Alive>())]
-fn choose_action(action: &mut Action, enemy: &Enemy, #[resource] rng: &mut ThreadRng) {
-    *action = if enemy.is_some() {
-        Action::random_aggression(rng)
-    } else {
-        Action::idle()
-    }
+fn choose_action(world: &mut World, rng: &mut impl Rng) {
+    world
+        .query_mut::<(&mut Action, &Enemy)>()
+        .into_iter()
+        .for_each(|(_, (action, enemy))| {
+            *action = if enemy.is_some() {
+                Action::random_aggression(rng)
+            } else {
+                Action::idle()
+            }
+        })
 }
 
 /// Выбираем врагов
-// #[system]
-// #[write_component(Enemy)]
-// #[read_component(Entity)]
-// #[read_component(Attacker)]
-fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
+fn choose_enemy(world: &mut World, rng: &mut impl Rng) {
     // Собираем всех кого можно атактовать
-    let targets: Vec<Entity> = <Entity>::query()
-        .filter(component::<Alive>())
-        .iter_mut(world)
-        .cloned()
+    let targets: Vec<Entity> = world
+        .query::<()>()
+        .with::<Alive>()
+        .into_iter()
+        .map(|(e, ())| e)
         .collect();
 
     // Не атакуем дохлых собак
-    <&mut Enemy>::query()
-        .filter(component::<Alive>())
-        .iter_mut(world)
-        .for_each(|enemy| {
+    world
+        .query_mut::<&mut Enemy>()
+        .with::<Alive>()
+        .into_iter()
+        .for_each(|(_, enemy)| {
             if let Some(enemy_ent) = enemy.entity() {
                 if !targets.contains(enemy_ent) {
                     *enemy = Enemy::new_none();
@@ -239,10 +240,11 @@ fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
         });
 
     // Теперь выставляем целью ту псину, которая нас покусала
-    <(&mut Enemy, &Attacker)>::query()
-        .filter(component::<Alive>())
-        .iter_mut(world)
-        .for_each(|(enemy, attacker)| {
+    world
+        .query_mut::<(&mut Enemy, &Attacker)>()
+        .with::<Alive>()
+        .into_iter()
+        .for_each(|(_, (enemy, attacker))| {
             if let Some(attacker_ent) = attacker.entity() {
                 if targets.contains(attacker_ent) {
                     *enemy = Some(*attacker_ent).into();
@@ -251,14 +253,15 @@ fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
         });
 
     // Если у нас всё ещё нет вражины, выбираем кого попало
-    <(Entity, &mut Enemy)>::query()
-        .filter(component::<Alive>())
-        .iter_mut(world)
+    world
+        .query_mut::<&mut Enemy>()
+        .with::<Alive>()
+        .into_iter()
         .for_each(|(doggy, enemy)| {
             if enemy.is_none() {
                 *enemy = targets
                     .iter()
-                    .filter(|target| **target != *doggy)
+                    .filter(|target| **target != doggy)
                     .nth(rng.gen_range(0..targets.len() - 1))
                     .cloned()
                     .into();
@@ -267,55 +270,56 @@ fn choose_enemy(world: &mut SubWorld, #[resource] rng: &mut ThreadRng) {
 }
 
 /// Выбираем cтепень урона
-// #[system(for_each)]
-// #[filter(component::<Alive>())]
-fn randomize_damage(damage: &mut Damage, #[resource] rng: &mut ThreadRng) {
-    *damage = rng.gen_range(1..=8).into();
+fn randomize_damage(world: &mut World, rng: &mut impl Rng) {
+    world
+        .query_mut::<&mut Damage>()
+        .with::<Alive>()
+        .into_iter()
+        .for_each(|(_, damage)| {
+            *damage = rng.gen_range(1..=8).into();
+        })
 }
 
 /// Лаем
-// #[system(for_each)]
-// #[filter(component::<Alive>())]
-fn bark(name: &Name, action: &Action, health: &Health) {
-    match action {
-        Action::Barks => println!("{}[{}] barks.", name, health),
-        _ => (),
-    }
+fn bark(world: &World) {
+    world
+        .query::<(&Name, &Action, &Health)>()
+        .with::<Alive>()
+        .into_iter()
+        .for_each(|(_, (name, action, health))| match action {
+            Action::Barks => println!("{}[{}] barks.", name, health),
+            _ => (),
+        })
 }
 
 /// Рычим
-// #[system(for_each)]
-// #[filter(component::<Alive>())]
-fn snarls(name: &Name, action: &Action, health: &Health) {
-    match action {
-        Action::Snarls => println!("{}[{}] snarls.", name, health),
-        _ => (),
-    }
+fn snarls(world: &World) {
+    world
+        .query::<(&Name, &Action, &Health)>()
+        .with::<Alive>()
+        .into_iter()
+        .for_each(|(_, (name, action, health))| match action {
+            Action::Snarls => println!("{}[{}] snarls.", name, health),
+            _ => (),
+        })
 }
 
 /// Кусаем
-// #[system]
-// #[read_component(Entity)]
-// #[write_component(Health)]
-// #[write_component(Attacker)]
-// #[read_component(Name)]
-// #[read_component(Action)]
-// #[read_component(Enemy)]
-// #[read_component(Damage)]
-fn attack(world: &mut SubWorld) {
+fn attack(world: &mut World) {
     // Сохраняем все найденные атаки как (атакующий, атакуемый)
     let mut target_entities: Vec<Entity> = vec![];
     let mut target_attackers: Vec<Entity> = vec![];
     let mut target_damages: Vec<u32> = vec![];
 
     // Находим кого и на сколько повредила каждая собака
-    <(Entity, &Action, &Enemy, &Damage)>::query()
-        .filter(component::<Alive>())
-        .iter_mut(world)
-        .for_each(|(doggy, action, enemy, damage)| {
+    world
+        .query::<(&Action, &Enemy, &Damage)>()
+        .with::<Alive>()
+        .into_iter()
+        .for_each(|(doggy, (action, enemy, damage))| {
             if let (Action::Attack, Some(enemy)) = (action, enemy.entity()) {
                 target_entities.push(*enemy);
-                target_attackers.push(*doggy);
+                target_attackers.push(doggy);
                 target_damages.push(damage.value());
             }
         });
@@ -323,18 +327,20 @@ fn attack(world: &mut SubWorld) {
     // Пишем что случилось в консоль
     let mut target_names_healths: HashMap<Entity, (String, Health)> = HashMap::default();
 
-    <(Entity, &Health, &Name)>::query()
-        .filter(component::<Alive>())
-        .iter_mut(world)
-        .filter(|(doggy, _, _)| target_entities.contains(doggy))
-        .for_each(|(doggy, health, name)| {
-            target_names_healths.insert(*doggy, (name.to_string(), *health));
+    world
+        .query::<(&Health, &Name)>()
+        .with::<Alive>()
+        .into_iter()
+        .filter(|(doggy, _)| target_entities.contains(doggy))
+        .for_each(|(doggy, (health, name))| {
+            target_names_healths.insert(doggy, (name.to_string(), *health));
         });
 
-    <(&Action, &Name, &Health, &Enemy, &Damage)>::query()
-        .filter(component::<Alive>())
-        .iter_mut(world)
-        .for_each(|(action, name, health, enemy, damage)| {
+    world
+        .query::<(&Action, &Name, &Health, &Enemy, &Damage)>()
+        .with::<Alive>()
+        .into_iter()
+        .for_each(|(_, (action, name, health, enemy, damage))| {
             if let (Action::Attack, Some(enemy_ent)) = (action, enemy.entity()) {
                 if let Some((target_name, target_health)) = target_names_healths.get(&enemy_ent) {
                     println!(
@@ -346,15 +352,16 @@ fn attack(world: &mut SubWorld) {
         });
 
     // Применяем урон к собакам
-    <(Entity, &mut Health, &mut Attacker)>::query()
-        .filter(component::<Alive>())
-        .iter_mut(world)
-        .for_each(|(doggy, health, attacker)| {
+    world
+        .query_mut::<(&mut Health, &mut Attacker)>()
+        .with::<Alive>()
+        .into_iter()
+        .for_each(|(doggy, (health, attacker))| {
             target_entities
                 .iter()
                 .zip(target_damages.iter())
                 .zip(target_attackers.iter())
-                .filter(|((wounded, _), _)| **wounded == *doggy)
+                .filter(|((wounded, _), _)| **wounded == doggy)
                 .for_each(|((_, damage), new_attacker)| {
                     *health = health.value().saturating_sub(*damage).into();
                     *attacker = Some(*new_attacker).into();
@@ -363,30 +370,33 @@ fn attack(world: &mut SubWorld) {
 }
 
 /// Подыхаем
-// #[system(for_each)]
-// #[filter(component::<Alive>())]
-fn death(entity: &Entity, health: &Health, name: &Name, commands: &mut CommandBuffer) {
-    if health.value() == 0 {
-        println!("Sadly {} is died", name);
-        commands.remove_component::<Alive>(*entity);
-    }
+fn death(world: &mut World) {
+    let mut dead_dogs = vec![];
+    world
+        .query::<(&Health, &Name)>()
+        .with::<Alive>()
+        .into_iter()
+        .for_each(|(doggy, (health, name))| {
+            if health.value() == 0 {
+                println!("Sadly {} is died", name);
+                dead_dogs.push(doggy)
+            }
+        });
+
+    dead_dogs.into_iter().for_each(|doggy| {
+        world.remove_one::<Alive>(doggy).unwrap();
+    });
 }
 
-// #[system(for_each)]
-// fn debug_print(
-//     entity: &Entity,
-//     alive: Option<&Alive>,
-//     name: &Name,
-//     health: &Health,
-//     action: &Action,
-//     attacker: &Attacker,
-//     enemy: &Enemy,
-//     damage: &Damage,
-// ) {
-//     println!(
-//         "entity: {:?}, alive: {:?}, name: {:?}, health: {:?}, action: {:?}, attacker: {:?}, enemy: {:?}, damage: {:?}",
-//         entity, alive, name, health, action, attacker, enemy, damage
-//     );
+// fn debug_print(world: &World) {
+//     world.query::<(Option<&Alive>, &Name, &Health, &Action, &Attacker, &Enemy, &Damage)>().into_iter().for_each(
+//         |(entity, (alive, name, health, action, attacker, enemy, damage))| {
+//             println!(
+//                 "entity: {:?}, alive: {:?}, name: {:?}, health: {:?}, action: {:?}, attacker: {:?}, enemy: {:?}, damage: {:?}",
+//                 entity, alive, name, health, action, attacker, enemy, damage
+//             );
+//         }
+//                                                                                                  );
 // }
 
 use structopt::StructOpt;
@@ -426,30 +436,23 @@ fn main() {
 
     populate_world(&mut world, &names);
 
-    // Добавляем системы в планеровщик
-    // let mut schedule = Schedule::builder()
-    //     // Системы использующие рандом будут выполняться в главном триде
-    //     .add_thread_local(choose_enemy_system())
-    //     .add_thread_local(randomize_damage_system())
-    //     .add_thread_local(choose_action_system())
-    //     // Остальные системы могут запускаться параллельно
-    //     .add_system(bark_system())
-    //     .add_system(snarls_system())
-    //     .add_system(attack_system())
-    //     .add_system(death_system())
-    //     // .add_thread_local(debug_print_system())
-    //     .flush()
-    //     .build();
-
-    // Генератор случайных чисел будет глобальным ресурсом
-    // let mut resources = Resources::default();
-    // resources.insert(rng);
-
     println!("Street fight begins!");
     for n in 1..=n_turns {
         println!("Turn {}", n);
-        // schedule.execute(&mut world, &mut resources);
-        if let Some((0, (_, name))) = world.query::<&Name>().with::<Alive>()
+
+        // Запускаем все системы
+        choose_enemy(&mut world, &mut rng);
+        randomize_damage(&mut world, &mut rng);
+        choose_action(&mut world, &mut rng);
+        bark(&mut world);
+        snarls(&mut world);
+        attack(&mut world);
+        death(&mut world);
+        // debug_print(&mut world);
+
+        if let Some((0, (_, name))) = world
+            .query::<&Name>()
+            .with::<Alive>()
             .iter()
             .enumerate()
             .last()
