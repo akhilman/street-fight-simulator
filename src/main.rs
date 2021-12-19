@@ -420,7 +420,7 @@ fn main() {
     let n_turns = opt.turns;
 
     // Тут можно добавить сколько угодно имён собак, для каждого имени будет создана собака
-    let mut names: Vec<&str> = if opt.dog_names.is_empty() {
+    let names: Vec<&str> = if opt.dog_names.is_empty() {
         vec![&"Rex", &"Fluffy"]
     } else {
         opt.dog_names.iter().map(|s| s.as_str()).collect()
